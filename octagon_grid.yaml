@@ -1,0 +1,29 @@
+min_x: -600
+max_x: 600
+min_y: -600
+max_y: 600
+grids:
+  - step: 20
+    theta: 22.5
+    stroke: "#0996"
+  - step: 20
+    theta: 67.5
+    stroke: "#0996"
+  - step: 20
+    theta: 112.5
+    stroke: "#0996"
+  - step: 20
+    theta: 157.5
+    stroke: "#0996"
+  - step: 100
+    theta: 22.5
+    stroke: "#09F"
+  - step: 100
+    theta: 67.5
+    stroke: "#09F"
+  - step: 100
+    theta: 112.5
+    stroke: "#09F"
+  - step: 100
+    theta: 157.5
+    stroke: "#09F"

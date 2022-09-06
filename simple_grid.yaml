@@ -1,0 +1,10 @@
+min_x: -600
+max_x: 600
+min_y: -600
+max_y: 600
+grids:
+  - step: 10
+    center-position: 0.5
+  - step: 10
+    center-position: 0.5
+    theta: 90
