@@ -3,7 +3,7 @@ use std::{f64::consts::FRAC_1_SQRT_2, path::PathBuf};
 use clap::Parser;
 use serde::Deserialize;
 use svg::{
-    node::element::{Group, Line},
+    node::element::{ClipPath, Definitions, Group, Line, Rectangle},
     Node,
 };
 
@@ -17,7 +17,9 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let out_file = args.output.unwrap_or_else(|| args.input.with_extension("svg"));
+    let out_file = args
+        .output
+        .unwrap_or_else(|| args.input.with_extension("svg"));
     let grids: GridCollection = serde_yaml::from_reader(std::fs::File::open(&args.input)?)?;
     let doc = grids.to_svg();
     svg::write(std::fs::File::create(&out_file)?, &doc)?;
@@ -26,26 +28,49 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct GridCollection {
-    min_x: f64,
-    max_x: f64,
-    min_y: f64,
-    max_y: f64,
+    /// Bounds for the generated SVG
+    bounds: Rect,
+    /// Bounds for the area of the image which will be rendered
+    clip: Option<Rect>,
     grids: Vec<Grid>,
 }
 
 impl GridCollection {
     pub fn to_svg(&self) -> svg::Document {
-        assert!(self.min_x < self.max_x);
-        assert!(self.min_y < self.max_y);
-        let mut document = svg::Document::new().set(
-            "viewBox",
-            (
-                self.min_x,
-                self.min_y,
-                self.max_x - self.min_x,
-                self.max_y - self.min_y,
-            ),
+        let bounds = self.clip.unwrap_or(self.bounds);
+        assert!(
+            bounds.min_x < bounds.max_x,
+            "min_x: {}, max_x: {}",
+            bounds.min_x,
+            bounds.max_x
         );
+        assert!(
+            bounds.min_y < bounds.max_y,
+            "min_y: {}, max_y: {}",
+            bounds.min_y,
+            bounds.max_y
+        );
+        let mut document = svg::Document::new()
+            .set(
+                "viewBox",
+                (
+                    self.bounds.min_x,
+                    self.bounds.min_y,
+                    self.bounds.max_x - self.bounds.min_x,
+                    self.bounds.max_y - self.bounds.min_y,
+                ),
+            )
+            .add(
+                Definitions::new().add(
+                    ClipPath::new().set("id", "viewable-area").add(
+                        Rectangle::new()
+                            .set("x", bounds.min_x)
+                            .set("y", bounds.min_y)
+                            .set("width", bounds.max_x - bounds.min_x)
+                            .set("height", bounds.max_y - bounds.min_y),
+                    ),
+                ),
+            );
         for grid in &self.grids {
             let mut theta = grid.theta.rem_euclid(360.0);
             let mut step = grid.step;
@@ -58,7 +83,7 @@ impl GridCollection {
             let cx = grid.cx - cos * step * grid.center_position;
             let cy = grid.cy - sin * step * grid.center_position;
 
-            let mut group = Group::new();
+            let mut group = Group::new().set("clip-path", "url(#viewable-area)");
             if let Some(stroke) = &grid.stroke {
                 group.assign("stroke", &**stroke);
             } else {
@@ -72,17 +97,17 @@ impl GridCollection {
                 assert!(sin >= FRAC_1_SQRT_2);
                 let cot = cos / sin;
                 // project onto the min_x line
-                let y0 = cy + cot * (cx - self.min_x);
+                let y0 = cy + cot * (cx - bounds.min_x);
                 // project onto the max_x line
-                let y1 = cy + cot * (cx - self.max_x);
+                let y1 = cy + cot * (cx - bounds.max_x);
                 let dy = (step / sin).abs();
-                let min_idx = ((self.min_y - y0.max(y1)) / dy - 1.0) as i64;
-                let max_idx = ((self.max_y - y0.min(y1)) / dy + 1.0) as i64;
+                let min_idx = ((bounds.min_y - y0.max(y1)) / dy - 1.0) as i64;
+                let max_idx = ((bounds.max_y - y0.min(y1)) / dy + 1.0) as i64;
                 for i in min_idx..=max_idx {
                     group.append(
                         Line::new()
-                            .set("x1", self.min_x)
-                            .set("x2", self.max_x)
+                            .set("x1", bounds.min_x)
+                            .set("x2", bounds.max_x)
                             .set("y1", y0 + dy * (i as f64))
                             .set("y2", y1 + dy * (i as f64)),
                     );
@@ -92,19 +117,19 @@ impl GridCollection {
                 assert!(cos.abs() >= FRAC_1_SQRT_2);
                 let tan = sin / cos;
                 // project onto the min_y line
-                let x0 = cx + tan * (cy - self.min_y);
+                let x0 = cx + tan * (cy - bounds.min_y);
                 // project onto the max_y line
-                let x1 = cx + tan * (cy - self.max_y);
+                let x1 = cx + tan * (cy - bounds.max_y);
                 let dx = (step / cos).abs();
-                let min_idx = ((self.min_x - x0.max(x1)) / dx - 1.0) as i64;
-                let max_idx = ((self.max_x - x0.min(x1)) / dx + 1.0) as i64;
+                let min_idx = ((bounds.min_x - x0.max(x1)) / dx - 1.0) as i64;
+                let max_idx = ((bounds.max_x - x0.min(x1)) / dx + 1.0) as i64;
                 for i in min_idx..=max_idx {
                     group.append(
                         Line::new()
                             .set("x1", x0 + dx * (i as f64))
                             .set("x2", x1 + dx * (i as f64))
-                            .set("y1", self.min_y)
-                            .set("y2", self.max_y),
+                            .set("y1", bounds.min_y)
+                            .set("y2", bounds.max_y),
                     );
                 }
             }
@@ -112,6 +137,15 @@ impl GridCollection {
         }
         document
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct Rect {
+    min_x: f64,
+    max_x: f64,
+    min_y: f64,
+    max_y: f64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

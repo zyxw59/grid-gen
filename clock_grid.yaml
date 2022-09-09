@@ -1,7 +1,8 @@
-min_x: -600
-max_x: 600
-min_y: -600
-max_y: 600
+bounds:
+  min-x: -600
+  max-x: 600
+  min-y: -600
+  max-y: 600
 grids:
   - step: 20
     stroke: "#0996"
