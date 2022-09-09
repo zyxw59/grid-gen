@@ -32,6 +32,10 @@ pub struct GridCollection {
     bounds: Rect,
     /// Bounds for the area of the image which will be rendered
     clip: Option<Rect>,
+    /// Default stroke color
+    stroke: Option<String>,
+    /// Default stroke width
+    stroke_width: Option<f64>,
     grids: Vec<Grid>,
 }
 
@@ -50,7 +54,7 @@ impl GridCollection {
             bounds.min_y,
             bounds.max_y
         );
-        let mut document = svg::Document::new()
+        let document = svg::Document::new()
             .set(
                 "viewBox",
                 (
@@ -71,6 +75,10 @@ impl GridCollection {
                     ),
                 ),
             );
+        let mut main_group = Group::new().set("stroke", self.stroke.as_deref().unwrap_or("black"));
+        if let Some(width) = self.stroke_width {
+            main_group.assign("stroke-width", width);
+        }
         for grid in &self.grids {
             let mut theta = grid.theta.rem_euclid(360.0);
             let mut step = grid.step;
@@ -86,8 +94,6 @@ impl GridCollection {
             let mut group = Group::new().set("clip-path", "url(#viewable-area)");
             if let Some(stroke) = &grid.stroke {
                 group.assign("stroke", &**stroke);
-            } else {
-                group.assign("stroke", "black");
             }
             if let Some(width) = grid.stroke_width {
                 group.assign("stroke-width", width);
@@ -133,9 +139,9 @@ impl GridCollection {
                     );
                 }
             }
-            document.append(group);
+            main_group.append(group);
         }
-        document
+        document.add(main_group)
     }
 }
 
